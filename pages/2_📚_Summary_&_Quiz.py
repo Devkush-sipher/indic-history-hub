@@ -11,8 +11,7 @@ import re
 
 st.title("🌐 Multilingual Summary & Quiz Generator")
 
-# Initialize translator
-# Use the service URL for the updated library
+# Initialize translator for the updated library
 translator = Translator(service_urls=['translate.google.com'])
 
 # Safe translation function
@@ -20,11 +19,10 @@ def safe_translate(text, dest_lang):
     if not text or not text.strip():
         return ""
     try:
-        # The new library requires a direct call
         result = translator.translate(text, dest=dest_lang)
         return result.text
-    except Exception as e:
-        st.warning(f"Translation failed: {e}. Falling back to original text.")
+    except Exception:
+        # Fallback to original text if translation fails
         return text
 
 # Supported languages
@@ -32,18 +30,18 @@ LANGUAGES = {
     "English": "en", "Telugu": "te", "Hindi": "hi", "Tamil": "ta", "Kannada": "kn"
 }
 
-# Initialize session state
+# Initialize session state for scores if it doesn't exist
 if "user_scores" not in st.session_state:
     st.session_state.user_scores = {}
 
-# UI inputs
+# --- UI Inputs ---
 language = st.selectbox("🌐 Choose Language", list(LANGUAGES.keys()))
 lang_code = LANGUAGES[language]
 topic = st.text_input("🔍 Enter a topic (e.g., Ashoka, Indus Valley Civilization, Taj Mahal)")
 
 if topic:
     try:
-        with st.spinner(f"Searching Wikipedia for '{topic}'..."):
+        with st.spinner("Searching Wikipedia for '{}'...".format(topic)):
             wikipedia.set_lang("en")
             search_results = wikipedia.search(topic, results=5)
             if not search_results:
@@ -58,7 +56,7 @@ if topic:
                 summary_en = page.summary
 
                 st.subheader("📖 Summary")
-                with st.spinner(f"Translating summary to {language}..."):
+                with st.spinner("Translating summary to {}...".format(language)):
                     translated_summary = safe_translate(summary_en, lang_code)
                 st.write(translated_summary)
 
@@ -69,31 +67,29 @@ if topic:
                             tts.save(fp.name)
                             st.audio(fp.name)
                     except Exception as audio_err:
-                        st.warning(f"Could not generate audio. Error: {audio_err}")
+                        st.warning("Could not generate audio. Error: {}".format(audio_err))
 
                 if st.button("✔️ Start Quiz", use_container_width=True):
-                    # --- Robust Quiz Generation Logic ---
                     sentences = [s.strip() for s in summary_en.split('.') if len(s.split()) > 8]
                     if len(sentences) < 4:
                         st.warning("Summary is too short to generate a meaningful quiz. Please try another topic.")
                         st.stop()
 
                     quiz = []
-                    # Ensure we have enough unique sentences for the quiz
                     num_questions = min(3, len(sentences))
                     questions_sentences = random.sample(sentences, num_questions)
 
                     for correct_sent_en in questions_sentences:
-                        # Pool of wrong answers are all sentences EXCEPT the correct one
                         wrong_options_pool = [s for s in sentences if s != correct_sent_en]
-                        # Select 3 wrong answers
                         wrong_sents_en = random.sample(wrong_options_pool, min(3, len(wrong_options_pool)))
 
                         options_en = [correct_sent_en] + wrong_sents_en
                         random.shuffle(options_en)
 
-                        # Translate everything for the quiz
-                        question_trans = safe_translate(f"Which of the following statements about '{selected_title}' is correct?", lang_code)
+                        # Create question and translate (removed f-string)
+                        question_en = "Which of the following statements about '{}' is correct?".format(selected_title)
+                        question_trans = safe_translate(question_en, lang_code)
+                        
                         options_trans = [safe_translate(opt, lang_code) for opt in options_en]
                         correct_trans = safe_translate(correct_sent_en, lang_code)
 
@@ -111,26 +107,29 @@ if topic:
                     st.rerun()
 
             except (DisambiguationError, PageError) as e:
-                st.error(f"Wikipedia Error: {e}. Please try a more specific topic.")
+                st.error("Wikipedia Error: {}. Please try a more specific topic.".format(e))
             except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
+                st.error("An unexpected error occurred: {}".format(e))
 
-# Quiz Display Logic
+# --- Quiz Display Logic ---
 if st.session_state.get("in_quiz", False):
     quiz = st.session_state.quiz
     qn = st.session_state.q_num
     total_q = len(quiz)
 
-    st.header(f"Quiz on: {st.session_state.topic}")
+    # Removed f-string
+    st.header("Quiz on: {}".format(st.session_state.topic))
 
     if qn < total_q:
         q_data = quiz[qn]
-        st.subheader(f"❓ Question {qn + 1} of {total_q}")
+        # Removed f-string
+        st.subheader("❓ Question {} of {}".format(qn + 1, total_q))
         st.write(q_data["q"])
         
-        user_answer = st.radio("Choose an option:", q_data["options"], key=f"q{qn}", index=None)
+        # Using string concatenation for keys (removed f-string)
+        user_answer = st.radio("Choose an option:", q_data["options"], key="q" + str(qn), index=None)
 
-        if st.button("Submit Answer", key=f"submit_{qn}"):
+        if st.button("Submit Answer", key="submit" + str(qn)):
             if user_answer is None:
                 st.warning("Please select an answer!")
             else:
@@ -139,18 +138,20 @@ if st.session_state.get("in_quiz", False):
                     st.session_state.score += 1
                 else:
                     st.error("❌ Incorrect.")
-                    st.markdown(f"**The correct statement was:** _{q_data['answer_trans']}_")
+                    # Removed f-string
+                    st.markdown("**The correct statement was:** _{}_".format(q_data['answer_trans']))
                 
                 st.session_state.q_num += 1
                 st.rerun()
     else:
         score = st.session_state.score
-        st.success(f"🎉 Quiz Completed! Your score: {score}/{total_q}")
+        # Removed f-string
+        st.success("🎉 Quiz Completed! Your score: {}/{}".format(score, total_q))
 
         topic = st.session_state.topic
         if topic not in st.session_state.user_scores:
             st.session_state.user_scores[topic] = []
-        st.session_state.user_scores[topic].append(f"{score}/{total_q}")
+        st.session_state.user_scores[topic].append("{}/{}".format(score, total_q))
 
         if st.button("🔁 Try Another Topic"):
             for k in list(st.session_state.keys()):
@@ -158,8 +159,9 @@ if st.session_state.get("in_quiz", False):
                     del st.session_state[k]
             st.rerun()
 
-# Score History
+# --- Score History ---
 if st.session_state.user_scores:
     with st.expander("📊 Show Score History"):
         for topic, score_list in st.session_state.user_scores.items():
-            st.write(f"**{topic}**: {', '.join(score_list)}")
+            # Removed f-string
+            st.write("**{}**: {}".format(topic, ', '.join(score_list)))
