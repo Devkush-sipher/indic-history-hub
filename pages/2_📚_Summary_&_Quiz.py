@@ -22,8 +22,7 @@ def safe_translate(text, dest_lang):
         result = translator.translate(text, dest=dest_lang)
         return result.text
     except Exception:
-        # Fallback to original text if translation fails
-        return text
+        return text # Fallback
 
 # Supported languages
 LANGUAGES = {
@@ -41,7 +40,7 @@ topic = st.text_input("🔍 Enter a topic (e.g., Ashoka, Indus Valley Civilizati
 
 if topic:
     try:
-        with st.spinner("Searching Wikipedia for '{}'...".format(topic)):
+        with st.spinner("Searching Wikipedia for '" + topic + "'..."):
             wikipedia.set_lang("en")
             search_results = wikipedia.search(topic, results=5)
             if not search_results:
@@ -56,7 +55,7 @@ if topic:
                 summary_en = page.summary
 
                 st.subheader("📖 Summary")
-                with st.spinner("Translating summary to {}...".format(language)):
+                with st.spinner("Translating summary to " + language + "..."):
                     translated_summary = safe_translate(summary_en, lang_code)
                 st.write(translated_summary)
 
@@ -67,10 +66,19 @@ if topic:
                             tts.save(fp.name)
                             st.audio(fp.name)
                     except Exception as audio_err:
-                        st.warning("Could not generate audio. Error: {}".format(audio_err))
+                        st.warning("Could not generate audio. Error: " + str(audio_err))
 
                 if st.button("✔️ Start Quiz", use_container_width=True):
-                    sentences = [s.strip() for s in summary_en.split('.') if len(s.split()) > 8]
+                    # --- Radically Simplified Quiz Generation Logic ---
+                    
+                    # 1. Break summary into sentences using a simple for loop
+                    initial_sentences = summary_en.split('.')
+                    sentences = []
+                    for s in initial_sentences:
+                        s_stripped = s.strip()
+                        if len(s_stripped.split()) > 8:
+                            sentences.append(s_stripped)
+
                     if len(sentences) < 4:
                         st.warning("Summary is too short to generate a meaningful quiz. Please try another topic.")
                         st.stop()
@@ -80,17 +88,25 @@ if topic:
                     questions_sentences = random.sample(sentences, num_questions)
 
                     for correct_sent_en in questions_sentences:
-                        wrong_options_pool = [s for s in sentences if s != correct_sent_en]
+                        # 2. Create pool of wrong answers using a simple for loop
+                        wrong_options_pool = []
+                        for s in sentences:
+                            if s != correct_sent_en:
+                                wrong_options_pool.append(s)
+                        
                         wrong_sents_en = random.sample(wrong_options_pool, min(3, len(wrong_options_pool)))
 
                         options_en = [correct_sent_en] + wrong_sents_en
                         random.shuffle(options_en)
-
-                        # Create question and translate (removed f-string)
-                        question_en = "Which of the following statements about '{}' is correct?".format(selected_title)
+                        
+                        question_en = "Which of the following statements about '" + selected_title + "' is correct?"
                         question_trans = safe_translate(question_en, lang_code)
                         
-                        options_trans = [safe_translate(opt, lang_code) for opt in options_en]
+                        # 3. Translate options using a simple for loop
+                        options_trans = []
+                        for opt in options_en:
+                            options_trans.append(safe_translate(opt, lang_code))
+                        
                         correct_trans = safe_translate(correct_sent_en, lang_code)
 
                         quiz.append({
@@ -107,9 +123,9 @@ if topic:
                     st.rerun()
 
             except (DisambiguationError, PageError) as e:
-                st.error("Wikipedia Error: {}. Please try a more specific topic.".format(e))
+                st.error("Wikipedia Error: " + str(e) + ". Please try a more specific topic.")
             except Exception as e:
-                st.error("An unexpected error occurred: {}".format(e))
+                st.error("An unexpected error occurred: " + str(e))
 
 # --- Quiz Display Logic ---
 if st.session_state.get("in_quiz", False):
@@ -117,16 +133,13 @@ if st.session_state.get("in_quiz", False):
     qn = st.session_state.q_num
     total_q = len(quiz)
 
-    # Removed f-string
-    st.header("Quiz on: {}".format(st.session_state.topic))
+    st.header("Quiz on: " + st.session_state.topic)
 
     if qn < total_q:
         q_data = quiz[qn]
-        # Removed f-string
-        st.subheader("❓ Question {} of {}".format(qn + 1, total_q))
+        st.subheader("❓ Question " + str(qn + 1) + " of " + str(total_q))
         st.write(q_data["q"])
         
-        # Using string concatenation for keys (removed f-string)
         user_answer = st.radio("Choose an option:", q_data["options"], key="q" + str(qn), index=None)
 
         if st.button("Submit Answer", key="submit" + str(qn)):
@@ -138,30 +151,29 @@ if st.session_state.get("in_quiz", False):
                     st.session_state.score += 1
                 else:
                     st.error("❌ Incorrect.")
-                    # Removed f-string
-                    st.markdown("**The correct statement was:** _{}_".format(q_data['answer_trans']))
+                    st.markdown("**The correct statement was:** _" + q_data['answer_trans'] + "_")
                 
                 st.session_state.q_num += 1
                 st.rerun()
     else:
         score = st.session_state.score
-        # Removed f-string
-        st.success("🎉 Quiz Completed! Your score: {}/{}".format(score, total_q))
+        st.success("🎉 Quiz Completed! Your score: " + str(score) + "/" + str(total_q))
 
         topic = st.session_state.topic
         if topic not in st.session_state.user_scores:
             st.session_state.user_scores[topic] = []
-        st.session_state.user_scores[topic].append("{}/{}".format(score, total_q))
+        st.session_state.user_scores[topic].append(str(score) + "/" + str(total_q))
 
         if st.button("🔁 Try Another Topic"):
-            for k in list(st.session_state.keys()):
-                if k.startswith("q") or k in ["quiz", "score", "in_quiz", "topic"]:
-                    del st.session_state[k]
+            # Simple cleanup of session state
+            keys_to_delete = ["quiz", "score", "q_num", "in_quiz", "topic"]
+            for key in keys_to_delete:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
 
 # --- Score History ---
 if st.session_state.user_scores:
     with st.expander("📊 Show Score History"):
         for topic, score_list in st.session_state.user_scores.items():
-            # Removed f-string
-            st.write("**{}**: {}".format(topic, ', '.join(score_list)))
+            st.write("**" + topic + "**: " + ', '.join(score_list))
